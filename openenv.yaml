@@ -1,0 +1,21 @@
+name: support-ticket-triage-openenv
+version: 1.0.0
+tag: openenv
+description: Real-world support ticket triage environment with three deterministic agent-graded tasks.
+entrypoint: server.app:app
+python_module: support_triage.environment:SupportTicketEnv
+models:
+  observation: support_triage.models.SupportTicketObservation
+  action: support_triage.models.SupportTicketAction
+  reward: support_triage.models.RewardBreakdown
+  state: support_triage.models.SupportTicketState
+tasks:
+  - task_id: billing_double_charge
+    task_title: Resolve a duplicate charge refund request
+    difficulty: easy
+  - task_id: security_lockout_triage
+    task_title: Investigate a suspicious account lockout
+    difficulty: medium
+  - task_id: enterprise_api_degradation
+    task_title: Draft a response for an enterprise API outage
+    difficulty: hard

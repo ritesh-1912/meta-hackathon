@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "support-ticket-triage-openenv"
+version = "0.1.0"
+description = "OpenEnv support-ticket triage benchmark for the Meta hackathon"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "pydantic>=2.7.0",
+  "openai>=1.30.0",
+  "PyYAML>=6.0.2",
+  "openenv-core>=0.1.0",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["support_triage*", "server*"]
+
+[project.scripts]
+server = "server.app:main"
