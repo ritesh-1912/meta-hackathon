@@ -18,11 +18,11 @@ from argparse import ArgumentParser
 from threading import Lock
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from .environment import SupportTicketEnv
-from .models import SupportTicketAction
+from .models import ResetRequest, SupportTicketAction
 
 app = FastAPI(title="Support Ticket Triage OpenEnv", version="1.0.0")
 _env = SupportTicketEnv()
@@ -35,61 +35,32 @@ class StepRequest(BaseModel):
     action: dict[str, Any]
 
 
-class ResetRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    task_id: str | None = None
-    seed: int | None = None
-
-
-def _reset_env(task_id: str | None = None, seed: int | None = None) -> dict[str, Any]:
+def _reset_env(task_id: str | None = None, seed: int | None = None):
     with _lock:
         try:
             observation = _env.reset(task_id=task_id, seed=seed)
-            state = _env.state()
         except Exception as exc:  # pragma: no cover - surfaced through HTTP response
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {
-        "observation": observation.model_dump(),
-        "state": state.model_dump(),
-    }
+    return observation
 
 
 @app.get("/")
-def root() -> dict[str, str]:
-    return {
-        "name": "support-ticket-triage-openenv",
-        "status": "ok",
-        "message": "OpenEnv support-ticket triage service is running.",
-    }
+async def root() -> dict[str, str]:
+    return {"status": "ok", "env": "support-ticket-triage"}
+
+
+@app.get("/health")
+async def health() -> dict[str, str]:
+    return {"status": "ok"}
 
 
 @app.post("/reset")
-def reset(request: ResetRequest | None = None) -> dict[str, Any]:
-    """POST /reset: Initialize a new episode.
-    
-    Request body (optional):
-        task_id: str | None - Specific task to run
-        seed: int | None - Random seed for task selection
-    
-    Returns:
-        observation: Initial observation for the episode
-        state: Complete episode state
-    """
-    payload = request or ResetRequest()
-    return _reset_env(task_id=payload.task_id, seed=payload.seed)
+async def reset(request: ResetRequest = Body(default=ResetRequest())):
+    return _reset_env(task_id=request.task_id, seed=request.seed)
 
 
 @app.get("/reset")
-def reset_get(task_id: str | None = None, seed: int | None = None) -> dict[str, Any]:
-    """GET /reset: Initialize a new episode via query parameters.
-    
-    Query parameters (optional):
-        task_id: str | None - Specific task to run
-        seed: int | None - Random seed for task selection
-    
-    Returns: Same as POST /reset
-    """
+async def reset_get(task_id: str | None = None, seed: int | None = None):
     return _reset_env(task_id=task_id, seed=seed)
 
 

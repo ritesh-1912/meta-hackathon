@@ -1,21 +1,14 @@
 ---
 title: Support Ticket Triage OpenEnv
-emoji: "🧭"
+emoji: 🧭
 colorFrom: blue
 colorTo: green
 sdk: docker
 app_port: 7860
 pinned: false
+tags:
+  - openenv
 ---
-
-# 🎯 Support Ticket Triage OpenEnv
-
-**A production-ready benchmark for evaluating AI agent decision-making in customer support operations.**
-
-> Challenge: Triage customer support tickets under realistic constraints, balancing classification accuracy, priority assignment, routing efficiency, and policy compliance—with incremental rewards for partial progress.
-
-![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-darkgreen?logo=fastapi)
 ![OpenEnv](https://img.shields.io/badge/OpenEnv-compatible-blueviolet)
 ![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
 
@@ -31,6 +24,7 @@ Support ticket triage is **mission-critical, real-world work** that tests multip
 - **Multi-step reasoning**: Completing interconnected triage steps with partial credit
 
 This environment surfaces common failure modes:
+
 - ❌ Misclassification (e.g., security issues → billing)
 - ❌ Incorrect priority (routine → P0, or vice versa)
 - ❌ Policy violations (("guaranteed instant refund", "definitely fixed in 1 hour")
@@ -70,12 +64,14 @@ This environment surfaces common failure modes:
 ### Observation & Action Flow
 
 **Observation** (after reset/step):
+
 - Episode metadata (ID, task type, difficulty, step count)
 - Ticket details (title, customer message, metadata)
 - Action schema & allowed fields
 - Current progress & last feedback
 
 **Action** (agent must decide):
+
 ```json
 {
   "classification": "billing",
@@ -89,6 +85,7 @@ This environment surfaces common failure modes:
 ```
 
 **Reward Breakdown**:
+
 - ✅ Component scores (per grading rubric)
 - ✅ Total incremental reward (delta)
 - ✅ Policy penalty (if violated)
@@ -99,48 +96,51 @@ This environment surfaces common failure modes:
 ## 📋 The Three Tasks
 
 ### Task 1: **Billing Double Charge** 🟢 EASY
+
 **Scenario**: Customer charged twice after canceling an order; needs immediate triage.
 
-| Objective | Details |
-|-----------|---------|
-| **Classification** | Must be: `billing` |
-| **Priority** | Must be: `p1` (urgent but not emergency) |
-| **Routing** | Must go to: `payments_ops` team |
-| **Summary** | Must mention: duplicate charge, cancelled order, refund |
-| **Response** | Must include: acknowledge issue, mention timeline, avoid instant refund promise |
-| **Escalation** | Should escalate: `true` |
+| Objective          | Details                                                                         |
+| ------------------ | ------------------------------------------------------------------------------- |
+| **Classification** | Must be: `billing`                                                              |
+| **Priority**       | Must be: `p1` (urgent but not emergency)                                        |
+| **Routing**        | Must go to: `payments_ops` team                                                 |
+| **Summary**        | Must mention: duplicate charge, cancelled order, refund                         |
+| **Response**       | Must include: acknowledge issue, mention timeline, avoid instant refund promise |
+| **Escalation**     | Should escalate: `true`                                                         |
 
 **Baseline score**: 0.95
 
 ---
 
 ### Task 2: **Security Account Lockout** 🟡 MEDIUM
+
 **Scenario**: Suspicious login from another country triggers account lockout; customer needs help.
 
-| Objective | Details |
-|-----------|---------|
-| **Classification** | Must be: `account_security` |
-| **Priority** | Must be: `p0` (emergency - security incident) |
-| **Routing** | Must go to: `trust_safety` team |
-| **Summary** | Must mention: suspicious login, MFA, recovery email |
-| **Response** | Policy-safe language: verify identity, reset MFA, investigate (no password/guarantee promises) |
-| **Escalation** | Should escalate: `true` |
+| Objective          | Details                                                                                        |
+| ------------------ | ---------------------------------------------------------------------------------------------- |
+| **Classification** | Must be: `account_security`                                                                    |
+| **Priority**       | Must be: `p0` (emergency - security incident)                                                  |
+| **Routing**        | Must go to: `trust_safety` team                                                                |
+| **Summary**        | Must mention: suspicious login, MFA, recovery email                                            |
+| **Response**       | Policy-safe language: verify identity, reset MFA, investigate (no password/guarantee promises) |
+| **Escalation**     | Should escalate: `true`                                                                        |
 
 **Baseline score**: 0.89
 
 ---
 
 ### Task 3: **Enterprise API Degradation** 🔴 HARD
+
 **Scenario**: Enterprise customer's production workflow blocked by API timeouts after deployment.
 
-| Objective | Details |
-|-----------|---------|
-| **Classification** | Must be: `platform_outage` |
-| **Priority** | Must be: `p1` (critical but investigate first) |
-| **Routing** | Must go to: `platform_engineering` team |
-| **Summary** | Must mention: timeouts, deployment, production workflow |
-| **Response** | Careful language: apologize, investigating status, next update (no "root cause", "fixed in 1h") |
-| **Escalation** | Should escalate: `true` |
+| Objective          | Details                                                                                         |
+| ------------------ | ----------------------------------------------------------------------------------------------- |
+| **Classification** | Must be: `platform_outage`                                                                      |
+| **Priority**       | Must be: `p1` (critical but investigate first)                                                  |
+| **Routing**        | Must go to: `platform_engineering` team                                                         |
+| **Summary**        | Must mention: timeouts, deployment, production workflow                                         |
+| **Response**       | Careful language: apologize, investigating status, next update (no "root cause", "fixed in 1h") |
+| **Escalation**     | Should escalate: `true`                                                                         |
 
 **Baseline score**: 0.89
 
@@ -149,6 +149,7 @@ This environment surfaces common failure modes:
 ## 📊 Grading & Rewards
 
 Each component is scored deterministically:
+
 - **Exact match**: 1.0 if correct value, 0.0 otherwise
 - **Keywords**: Partial credit based on # matching keywords
 - **Policy**: Good keywords + penalty for forbidden words
@@ -203,13 +204,13 @@ python inference.py
 
 ### 📝 Environment Variables
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `API_BASE_URL` | `https://router.huggingface.co/v1` | OpenAI-compatible endpoint |
-| `MODEL_NAME` | `Qwen/Qwen2.5-72B-Instruct` | LLM to query |
-| `HF_TOKEN` or `API_KEY` | (required) | Authentication token |
-| `TASK_ID` | (random) | Run specific task (billing_double_charge, security_lockout_triage, enterprise_api_degradation) |
-| `BENCHMARK_NAME` | `support-ticket-triage` | Logging identifier |
+| Variable                | Default                            | Purpose                                                                                        |
+| ----------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `API_BASE_URL`          | `https://router.huggingface.co/v1` | OpenAI-compatible endpoint                                                                     |
+| `MODEL_NAME`            | `Qwen/Qwen2.5-72B-Instruct`        | LLM to query                                                                                   |
+| `HF_TOKEN` or `API_KEY` | (required)                         | Authentication token                                                                           |
+| `TASK_ID`               | (random)                           | Run specific task (billing_double_charge, security_lockout_triage, enterprise_api_degradation) |
+| `BENCHMARK_NAME`        | `support-ticket-triage`            | Logging identifier                                                                             |
 
 ---
 
@@ -271,16 +272,19 @@ hackathon/
 ## 💡 Key Features
 
 ### ✨ For Researchers
+
 - **Deterministic grading**: Reproducible scoring across runs
 - **Shaped rewards**: Incremental feedback for multi-step triage
 - **Policy constraints**: Realistic safety guardrails
 
 ### 🎯 For Practitioners
+
 - **OpenEnv standard**: Compatible with industry-standard agentic eval frameworks
 - **Production-like scenarios**: Real-world support operations challenges
 - **Extensible design**: Add new tasks, metrics, or difficulty levels
 
 ### 🧠 For AI/ML Engineers
+
 - **Type-safe models**: Pydantic schemas for actions, observations, rewards
 - **HTTP-first**: Easy integration with any agent framework (LangChain, CrewAI, etc.)
 - **Docker-ready**: One-line deployment to Hugging Face Spaces
@@ -290,9 +294,11 @@ hackathon/
 ## 📌 API Reference
 
 ### `POST /reset`
+
 Initialize environment and return first observation.
 
 **Request**:
+
 ```json
 {
   "task_id": null,
@@ -301,6 +307,7 @@ Initialize environment and return first observation.
 ```
 
 **Response**:
+
 ```json
 {
   "observation": { ... },
@@ -311,9 +318,11 @@ Initialize environment and return first observation.
 ---
 
 ### `POST /step`
+
 Execute an action and get feedback.
 
 **Request**:
+
 ```json
 {
   "action": {
@@ -329,6 +338,7 @@ Execute an action and get feedback.
 ```
 
 **Response**:
+
 ```json
 {
   "observation": { ... },
@@ -341,9 +351,11 @@ Execute an action and get feedback.
 ---
 
 ### `GET /state`
+
 Retrieve current episode state.
 
 **Response**:
+
 ```json
 {
   "episode_id": "abc123",
@@ -359,13 +371,14 @@ Retrieve current episode state.
 
 ## 🚀 Baseline Performance
 
-| Task | Difficulty | Fallback Score | Notes |
-|------|-----------|-----------------|-------|
-| billing_double_charge | 🟢 Easy | **0.95** | Clear routing, good response |
-| security_lockout_triage | 🟡 Medium | **0.89** | Handles policy constraints well |
-| enterprise_api_degradation | 🔴 Hard | **0.89** | Complex wording requirements |
+| Task                       | Difficulty | Fallback Score | Notes                           |
+| -------------------------- | ---------- | -------------- | ------------------------------- |
+| billing_double_charge      | 🟢 Easy    | **0.95**       | Clear routing, good response    |
+| security_lockout_triage    | 🟡 Medium  | **0.89**       | Handles policy constraints well |
+| enterprise_api_degradation | 🔴 Hard    | **0.89**       | Complex wording requirements    |
 
 **Fallback policy** (runs without API key):
+
 - Uses heuristic rules to fill each action field
 - Suitable for testing infrastructure and baseline comparisons
 - Deterministic: same score on every run
@@ -377,6 +390,7 @@ Retrieve current episode state.
 ### Add a New Task
 
 1. Define scenario in `support_triage/scenarios.py`:
+
 ```python
 TaskScenario(
     task_id="my_new_task",
@@ -415,6 +429,7 @@ Open source benchmark for the Meta OpenEnv Hackathon.
 ## 🤝 Support
 
 For issues or questions:
+
 - 📧 Open an issue on GitHub
 - 🚀 check deployment at: https://huggingface.co/spaces/ritesh1912/hackathon
 - 💬 See examples in `inference.py`

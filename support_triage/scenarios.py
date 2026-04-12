@@ -30,6 +30,8 @@ class ComponentSpec:
     keywords: tuple[str, ...] = ()
     forbidden_keywords: tuple[str, ...] = ()
     unlock_step: int = 1
+    full_credit_hits: int | None = None
+    forbidden_penalty: float = 0.08
 
 
 @dataclass(frozen=True)
@@ -103,6 +105,7 @@ TASKS: tuple[TaskScenario, ...] = (
             ),
             ComponentSpec("escalation", "escalate", "boolean", 0.08, expected=True, unlock_step=3),
         ),
+        max_steps=5,
     ),
     TaskScenario(
         task_id="security_lockout_triage",
@@ -164,9 +167,11 @@ TASKS: tuple[TaskScenario, ...] = (
                 0.12,
                 keywords=("verify identity", "support can help"),
                 forbidden_keywords=("password", "guarantee", "immediately unlock"),
+                forbidden_penalty=0.08,
                 unlock_step=3,
             ),
         ),
+        max_steps=5,
     ),
     TaskScenario(
         task_id="enterprise_api_degradation",
@@ -218,7 +223,8 @@ TASKS: tuple[TaskScenario, ...] = (
                 "response_draft",
                 "keywords",
                 0.16,
-                keywords=("apologize", "investigating", "status"),
+                keywords=("investigating", "engineering team", "status update", "deployment", "impact"),
+                full_credit_hits=4,
                 unlock_step=3,
             ),
             ComponentSpec(
@@ -227,10 +233,19 @@ TASKS: tuple[TaskScenario, ...] = (
                 "policy",
                 0.16,
                 keywords=("we are investigating", "next update"),
-                forbidden_keywords=("root cause", "fix in 1 hour", "RCA complete"),
+                forbidden_keywords=(
+                    "root cause identified",
+                    "will be fixed in",
+                    "definitely",
+                    "guaranteed",
+                    "within the hour",
+                    "immediately resolved",
+                ),
+                forbidden_penalty=0.15,
                 unlock_step=3,
             ),
         ),
+        max_steps=8,
     ),
 )
 

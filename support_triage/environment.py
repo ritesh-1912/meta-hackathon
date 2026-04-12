@@ -46,7 +46,9 @@ class EpisodeState:
     step_count: int = 0
     score: float = 0.0
     done: bool = False
+    max_steps: int = 0
     progress: dict[str, float] = field(default_factory=dict)
+    component_scores: dict[str, float] = field(default_factory=dict)
     history: list[dict[str, str]] = field(default_factory=list)
     last_feedback: str | None = None
 
@@ -101,7 +103,7 @@ class SupportTicketEnv:
             index = 0 if seed is None else seed % len(self._tasks)
             task = self._tasks[index]
 
-        self._state = EpisodeState(task=task)
+        self._state = EpisodeState(task=task, max_steps=task.max_steps)
         return self._build_observation()
 
     def state(self) -> SupportTicketState:
@@ -113,7 +115,7 @@ class SupportTicketEnv:
             task_title=state.task.task_title,
             difficulty=state.task.difficulty,
             step_count=state.step_count,
-            max_steps=state.task.max_steps,
+            max_steps=state.max_steps,
             score=state.score,
             done=state.done,
             observation=observation,
@@ -149,6 +151,7 @@ class SupportTicketEnv:
         state.step_count += 1
 
         component_scores = self._score_components(state.task.components, parsed_action, state.step_count)
+        state.component_scores = dict(component_scores)
         previous_score = state.score
         for name, value in component_scores.items():
             state.progress[name] = max(state.progress.get(name, 0.0), value)
@@ -157,9 +160,10 @@ class SupportTicketEnv:
         penalty = self._policy_penalty(state.task.components, parsed_action)
         state.score = self._clamp(raw_score + penalty)
         progress_delta = state.score - previous_score
+        reward_delta = self._clamp(progress_delta)
 
-        state.done = state.score >= 0.999 or state.step_count >= state.task.max_steps
-        state.last_feedback = self._build_feedback(state.task, parsed_action, component_scores, penalty)
+        state.done = state.score >= 0.95 or state.step_count >= state.max_steps
+        state.last_feedback = self._build_feedback(state.task, parsed_action, component_scores)
         state.history.append(
             {
                 "step": str(state.step_count),
@@ -170,9 +174,9 @@ class SupportTicketEnv:
 
         observation = self._build_observation()
         reward = RewardBreakdown(
-            total=progress_delta,
-            progress_delta=progress_delta,
-            bonus=max(state.score - previous_score, 0.0),
+            total=reward_delta,
+            progress_delta=reward_delta,
+            bonus=reward_delta,
             penalty=penalty,
             component_scores=component_scores,
             score=state.score,
@@ -202,8 +206,8 @@ class SupportTicketEnv:
             task_title=state.task.task_title,
             difficulty=state.task.difficulty,
             step_count=state.step_count,
-            remaining_steps=max(state.task.max_steps - state.step_count, 0),
-            max_steps=state.task.max_steps,
+            remaining_steps=max(state.max_steps - state.step_count, 0),
+            max_steps=state.max_steps,
             ticket_id=state.task.ticket_id,
             title=state.task.title,
             customer_message=state.task.customer_message,
@@ -211,6 +215,7 @@ class SupportTicketEnv:
             action_schema=self._action_schema(),
             task_instruction=state.task.task_instruction,
             allowed_actions=list(state.task.allowed_actions),
+            component_scores=dict(state.component_scores),
             progress=dict(state.progress),
             last_feedback=state.last_feedback,
         )
@@ -247,13 +252,18 @@ class SupportTicketEnv:
             if not text:
                 return 0.0
             hits = sum(1 for keyword in spec.keywords if self._normalize(keyword) in text)
+            if spec.full_credit_hits is not None and hits >= spec.full_credit_hits:
+                return 1.0
             return hits / max(len(spec.keywords), 1)
         if spec.kind == "policy":
             text = self._normalize(value)
             if not text:
                 return 0.0
             good_hits = sum(1 for keyword in spec.keywords if self._normalize(keyword) in text)
-            good_score = good_hits / max(len(spec.keywords), 1)
+            if spec.full_credit_hits is not None and good_hits >= spec.full_credit_hits:
+                good_score = 1.0
+            else:
+                good_score = good_hits / max(len(spec.keywords), 1)
             bad_hits = sum(1 for keyword in spec.forbidden_keywords if self._normalize(keyword) in text)
             bad_penalty = bad_hits / max(len(spec.forbidden_keywords), 1) if spec.forbidden_keywords else 0.0
             return self._clamp(good_score - bad_penalty)
@@ -274,7 +284,7 @@ class SupportTicketEnv:
                 continue
             for keyword in spec.forbidden_keywords:
                 if self._normalize(keyword) in response_text or self._normalize(keyword) in summary_text:
-                    penalty -= 0.08
+                    penalty -= spec.forbidden_penalty
         if action.confidence is not None and action.confidence < 0.25:
             penalty -= 0.02
         return penalty
@@ -284,19 +294,39 @@ class SupportTicketEnv:
         task: TaskScenario,
         action: SupportTicketAction,
         component_scores: dict[str, float],
-        penalty: float,
     ) -> str:
-        completed = [name for name, score in component_scores.items() if score >= 0.99]
-        partial = [f"{name}:{score:.2f}" for name, score in component_scores.items() if 0.0 < score < 0.99]
-        if penalty < 0:
-            penalty_text = f" penalty={penalty:.2f}"
-        else:
-            penalty_text = ""
-        if completed:
-            return f"{task.task_id} progress={','.join(completed)}{' ' if partial else ''}{' '.join(partial)}{penalty_text}".strip()
-        if partial:
-            return f"{task.task_id} partial={' '.join(partial)}{penalty_text}".strip()
-        return f"{task.task_id} no_valid_progress{penalty_text}".strip()
+        action_data = action.model_dump(exclude_none=True)
+        parts: list[str] = []
+        for spec in task.components:
+            if spec.name not in component_scores:
+                continue
+            score = component_scores.get(spec.name, 0.0)
+            value = self._normalize(action_data.get(spec.field))
+            if spec.kind == "exact":
+                if score >= 0.99:
+                    parts.append(f"{spec.name}: correct.")
+                else:
+                    parts.append(
+                        f"{spec.name}: incorrect (got {value or 'missing'}, expected {self._normalize(spec.expected)})."
+                    )
+            elif spec.kind == "boolean":
+                if score >= 0.99:
+                    parts.append(f"{spec.name}: correct.")
+                else:
+                    parts.append(f"{spec.name}: incorrect (got {value or 'missing'}, expected {str(spec.expected).lower()}).")
+            elif spec.kind == "keywords":
+                hits = sum(1 for keyword in spec.keywords if self._normalize(keyword) in value)
+                if spec.full_credit_hits and hits >= spec.full_credit_hits:
+                    parts.append(f"{spec.name}: full credit ({hits}/{len(spec.keywords)} keywords matched).")
+                else:
+                    parts.append(f"{spec.name}: {hits}/{len(spec.keywords)} keywords matched.")
+            elif spec.kind == "policy":
+                hits = sum(1 for keyword in spec.keywords if self._normalize(keyword) in value)
+                if spec.full_credit_hits and hits >= spec.full_credit_hits:
+                    parts.append(f"{spec.name}: policy-safe, {hits}/{len(spec.keywords)} keywords matched.")
+                else:
+                    parts.append(f"{spec.name}: {hits}/{len(spec.keywords)} keywords matched; review policy language.")
+        return " ".join(parts) if parts else f"{task.task_id}: no feedback available."
 
     def _compact_action(self, action: SupportTicketAction) -> str:
         data = action.model_dump(exclude_none=True)

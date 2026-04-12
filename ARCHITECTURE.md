@@ -7,13 +7,17 @@ A deep dive into the support ticket triage benchmark's design philosophy, gradin
 ## Core Design Principles
 
 ### 1. **Deterministic Grading**
+
 Every evaluation is reproducible and explainable.
+
 - No randomness in scoring (except episode sampling)
 - Component scores are deterministic functions of action values
 - Agents can learn patterns from feedback
 
 ### 2. **Shaped Rewards (Incremental Progress)**
+
 Agents earn partial credit for progress toward completeness.
+
 - Early steps reward "broad strokes" (correct classification, priority, routing)
 - Later steps enable "fine-tuning" (careful language, policy compliance)
 - Components unlock at specific steps (e.g., routing at step 2)
@@ -21,7 +25,9 @@ Agents earn partial credit for progress toward completeness.
 **Why:** Encourages systematic problem-solving. Bad agents won't get stuck at step 1.
 
 ### 3. **Policy Constraints (Real-World Safety)**
+
 Realistic guardrails on agent language and reasoning.
+
 - Forbidden words in responses incur direct penalties
 - Encourages agents to avoid common failure modes
 - Examples: "guaranteed", "immediately", "fixed in 1 hour"
@@ -29,7 +35,9 @@ Realistic guardrails on agent language and reasoning.
 **Why:** Mirrors real support ops where policy violations have consequences.
 
 ### 4. **Type-Safe Models**
+
 All data is validated via Pydantic.
+
 - Catches invalid actions early
 - HTTP layer rejects malformed requests
 - Client SDKs have IDE autocomplete support
@@ -43,23 +51,31 @@ All data is validated via Pydantic.
 Each task has 4-6 **components** (like a rubric), scored independently:
 
 #### **Exact Match** (binary: 0.0 or 1.0)
+
 Example: `classification == "billing"` → 1.0, else 0.0
+
 - Used for objective decisions (classification, routing, priority)
 - High weight because correctness is clear-cut
 
 #### **Keywords** (partial credit)
+
 Example: Response must mention "refund", "review", "timeline"
+
 - Score = (# matched keywords) / (# required keywords)
 - Allows flexibility in phrasing
 - Used for summaries and response drafts
 
 #### **Boolean** (binary: 0.0 or 1.0)
+
 Example: `escalate == true` → 1.0, else 0.0
+
 - Simple yes/no decisions
 - Low weight (0.08–0.12)
 
 #### **Policy** (keywords + forbidden words)
+
 Example: Good words: ["verify identity", "support can help"] | Forbidden: ["password", "immediately unlock"]
+
 - Score = (good hits / total good) - (bad hits / total bad)
 - Penalties for policy violations
 - Most complex scoring method
@@ -67,14 +83,14 @@ Example: Good words: ["verify identity", "support can help"] | Forbidden: ["pass
 
 ### Example: billing_double_charge Task
 
-| Component | Kind | Field | Weight | Evaluation |
-|-----------|------|-------|--------|------------|
-| classification | exact | classification | 0.22 | Must be "billing" |
-| priority | exact | priority | 0.18 | Must be "p1" |
-| routing | exact | route_to | 0.18 | Must be "payments_ops" |
-| summary | keywords | summary | 0.20 | Mention: ["duplicate charge", "cancelled order", "refund"] |
-| response | keywords | response_draft | 0.14 | Mention: ["review", "payment team", "timeline"] |
-| escalation | boolean | escalate | 0.08 | Must be true |
+| Component      | Kind     | Field          | Weight | Evaluation                                                 |
+| -------------- | -------- | -------------- | ------ | ---------------------------------------------------------- |
+| classification | exact    | classification | 0.22   | Must be "billing"                                          |
+| priority       | exact    | priority       | 0.18   | Must be "p1"                                               |
+| routing        | exact    | route_to       | 0.18   | Must be "payments_ops"                                     |
+| summary        | keywords | summary        | 0.20   | Mention: ["duplicate charge", "cancelled order", "refund"] |
+| response       | keywords | response_draft | 0.14   | Mention: ["review", "payment team", "timeline"]            |
+| escalation     | boolean  | escalate       | 0.08   | Must be true                                               |
 
 **Total weight**: 1.0 (weighted sum of all components)
 
@@ -136,12 +152,14 @@ RewardBreakdown {
 ### 🟢 Easy: billing_double_charge
 
 **Why easy:**
+
 - Clear, objective decisions (classification, priority, routing)
 - Straightforward domain knowledge (payments team)
 - Minimal policy constraints
 - Baseline score: 0.95
 
 **Challenge:**
+
 - Must avoid promising "instant refund"
 - Requires understanding refund timelines
 
@@ -150,12 +168,14 @@ RewardBreakdown {
 ### 🟡 Medium: security_lockout_triage
 
 **Why medium:**
+
 - Introduces urgency escalation (P0 instead of P1)
 - Adds policy constraints (careful security language)
 - Requires domain understanding (MFA, verification)
 - Baseline score: 0.89
 
 **Challenge:**
+
 - Can't promise "immediately unlock" or "guarantee"
 - Must balance customer empathy with security rigor
 - Forbidden words: ["password", "guarantee", "immediately unlock"]
@@ -165,14 +185,16 @@ RewardBreakdown {
 ### 🔴 Hard: enterprise_api_degradation
 
 **Why hard:**
+
 - Enterprise customer = high stakes
 - Production workflow disruption = urgency
 - Highly constrained language (RCA, fix time promises forbidden)
 - Baseline score: 0.89
 
 **Challenge:**
-- Must *not* claim to know root cause
-- Must *not* promise a fix timeline
+
+- Must _not_ claim to know root cause
+- Must _not_ promise a fix timeline
 - Must appear professional and transparent
 - Forbidden words: ["root cause", "fix in 1 hour", "RCA complete"]
 
@@ -183,6 +205,7 @@ RewardBreakdown {
 ### Adding a New Task
 
 1. **Define scenario** in `support_triage/scenarios.py`:
+
    ```python
    TaskScenario(
        task_id="my_task_id",
@@ -205,6 +228,7 @@ RewardBreakdown {
 2. **Add to TASKS tuple** (keep in order: easy, medium, hard)
 
 3. **Register in openenv.yaml**:
+
    ```yaml
    tasks:
      - task_id: my_task_id
@@ -220,6 +244,7 @@ RewardBreakdown {
 ### Adding New Evaluation Metrics
 
 Edit `support_triage/environment.py`:
+
 ```python
 def _compute_custom_metric(self, action: SupportTicketAction) -> float:
     """Custom metric for research."""
@@ -239,15 +264,16 @@ reward.custom_metrics = {"sentiment": custom_metric}
 
 Runs without an API key using hand-crafted heuristics.
 
-| Task | Strategy | Score |
-|------|----------|-------|
-| billing_double_charge | Exact heuristic match | 0.95 |
-| security_lockout_triage | Exact heuristic match | 0.89 |
-| enterprise_api_degradation | Exact heuristic match | 0.89 |
+| Task                       | Strategy              | Score |
+| -------------------------- | --------------------- | ----- |
+| billing_double_charge      | Exact heuristic match | 0.95  |
+| security_lockout_triage    | Exact heuristic match | 0.89  |
+| enterprise_api_degradation | Exact heuristic match | 0.89  |
 
 ### LLM Agent (with API)
 
 Depends on model quality:
+
 - Qwen/Qwen2.5-72B: ~0.85–0.92 (good reasoning)
 - GPT-4: ~0.90–0.95 (excellent)
 - GPT-3.5: ~0.75–0.85 (reasonable)
@@ -258,7 +284,9 @@ Depends on model quality:
 ## API Reference Summary
 
 ### `POST /reset`
+
 Initialize episode.
+
 ```bash
 curl -X POST http://localhost:7860/reset \
   -H "Content-Type: application/json" \
@@ -266,7 +294,9 @@ curl -X POST http://localhost:7860/reset \
 ```
 
 ### `POST /step`
+
 Execute action.
+
 ```bash
 curl -X POST http://localhost:7860/step \
   -H "Content-Type: application/json" \
@@ -284,7 +314,9 @@ curl -X POST http://localhost:7860/step \
 ```
 
 ### `GET /state`
+
 Retrieve episode state.
+
 ```bash
 curl http://localhost:7860/state
 ```
@@ -294,16 +326,19 @@ curl http://localhost:7860/state
 ## Code Quality Standards
 
 ### Type Safety
+
 - All public functions use type hints
 - No `Any` in critical paths
 - Pydantic for external IO validation
 
 ### Testability
+
 - Deterministic (same seed → same score)
 - No sleep/network in core logic
 - Mock-friendly HTTP layer
 
 ### Documentation
+
 - Module docstrings explain purpose
 - Class docstrings include examples
 - Method docstrings describe contracts

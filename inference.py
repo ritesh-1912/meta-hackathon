@@ -70,7 +70,7 @@ def log_step(step: int, action: str, reward: float, done: bool, error: str | Non
 def log_end(success: bool, steps: int, score: float, rewards: list[float]) -> None:
     rewards_str = ",".join(f"{reward:.2f}" for reward in rewards)
     print(
-        f"[END] success={str(success).lower()} steps={steps} score={score:.2f} rewards={rewards_str}",
+        f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}",
         flush=True,
     )
 
@@ -161,15 +161,14 @@ def request_action(client: OpenAI | None, observation: Any) -> SupportTicketActi
 
 
 def run_episode(env: SupportTicketEnv, client: OpenAI | None, task_id: str) -> tuple[bool, int, float, list[float]]:
-    observation = env.reset(task_id=task_id)
-    log_start(task=task_id, env=BENCHMARK_NAME, model=MODEL_NAME)
-
     rewards: list[float] = []
     steps = 0
     score = 0.0
     success = False
 
     try:
+        observation = env.reset(task_id=task_id)
+        log_start(task=task_id, env=BENCHMARK_NAME, model=MODEL_NAME)
         while True:
             action = request_action(client, observation)
             observation, reward, done, info = env.step(action)

@@ -37,6 +37,13 @@ class SupportTicketAction(BaseModel):
     confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 
+class ResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: Optional[str] = None
+    seed: Optional[int] = None
+
+
 class SupportTicketObservation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -54,6 +61,7 @@ class SupportTicketObservation(BaseModel):
     action_schema: str
     task_instruction: str
     allowed_actions: list[str]
+    component_scores: Dict[str, float] = Field(default_factory=dict)
     progress: Dict[str, float] = Field(default_factory=dict)
     last_feedback: Optional[str] = None
 

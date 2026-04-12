@@ -1,21 +1,114 @@
 name: support-ticket-triage-openenv
-version: 1.0.0
+version: "1.0.0"
 tag: openenv
-description: Real-world support ticket triage environment with three deterministic agent-graded tasks.
-entrypoint: server.app:app
+description: >
+  Real-world support ticket triage environment. Agents classify tickets,
+  assign priority, route to the correct team, draft policy-safe responses,
+  and decide on escalation — with dense incremental rewards and policy
+  violation penalties across three tasks of increasing difficulty.
+
+entrypoint: support_triage.server:app
 python_module: support_triage.environment:SupportTicketEnv
-models:
-  observation: support_triage.models.SupportTicketObservation
-  action: support_triage.models.SupportTicketAction
-  reward: support_triage.models.RewardBreakdown
-  state: support_triage.models.SupportTicketState
+
+reward_range: [0.0, 1.0]
+
+action_space:
+  type: structured
+  schema:
+    classification:
+      type: string
+      description: "Issue category: billing | account_security | platform_outage | general"
+    priority:
+      type: string
+      description: "Urgency: p0 (emergency) | p1 (urgent) | p2 (normal) | p3 (low)"
+    route_to:
+      type: string
+      description: "Team: payments_ops | trust_safety | platform_engineering | frontline"
+    summary:
+      type: string
+      description: "1-2 sentence description of the issue"
+    response_draft:
+      type: string
+      description: "Policy-safe customer-facing response"
+    escalate:
+      type: boolean
+      description: "Whether to escalate the ticket"
+    confidence:
+      type: number
+      description: "Agent confidence score in [0.0, 1.0]"
+
+observation_space:
+  type: structured
+  schema:
+    episode_id:
+      type: string
+    task_id:
+      type: string
+    difficulty:
+      type: string
+    step:
+      type: integer
+    ticket:
+      type: object
+      description: "Customer ticket with title, message, metadata"
+    action_schema:
+      type: object
+      description: "Allowed fields and values for the next action"
+    progress:
+      type: object
+      description: "Per-component scores from previous step"
+    last_feedback:
+      type: string
+      nullable: true
+
 tasks:
   - task_id: billing_double_charge
     task_title: Resolve a duplicate charge refund request
     difficulty: easy
+    max_steps: 5
+    success_threshold: 0.85
+    description: >
+      Customer was charged twice after cancelling an order. Agent must classify
+      as billing, assign p1 priority, route to payments_ops, and draft a
+      policy-safe response that acknowledges the issue without promising
+      an instant refund.
+
   - task_id: security_lockout_triage
     task_title: Investigate a suspicious account lockout
     difficulty: medium
+    max_steps: 5
+    success_threshold: 0.85
+    description: >
+      A suspicious foreign login triggered an account lockout. Agent must
+      classify as account_security, assign p0 emergency priority, route to
+      trust_safety, and draft a response that verifies identity and investigates
+      without promising immediate access.
+
   - task_id: enterprise_api_degradation
     task_title: Draft a response for an enterprise API outage
     difficulty: hard
+    max_steps: 8
+    success_threshold: 0.85
+    description: >
+      Enterprise customer's production workflow is blocked by API timeouts
+      after a deployment. Agent must classify as platform_outage, assign p1,
+      route to platform_engineering, and draft a careful response that avoids
+      committing to a root cause or fix timeline.
+
+endpoints:
+  reset:
+    method: POST
+    path: /reset
+    description: "Reset episode; optional body {task_id: string}"
+  step:
+    method: POST
+    path: /step
+    description: "Submit triage action, receive reward and next observation"
+  state:
+    method: GET
+    path: /state
+    description: "Return current episode state without advancing it"
+  health:
+    method: GET
+    path: /health
+    description: "Liveness check — must return 200"
