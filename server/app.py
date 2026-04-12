@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import uvicorn
-
-from support_triage.server import app
+from support_triage.server import app, main as run_server
 
 
 def main() -> None:
-    uvicorn.run(app, host="0.0.0.0", port=7860)
+    run_server()
 
 
 if __name__ == "__main__":
