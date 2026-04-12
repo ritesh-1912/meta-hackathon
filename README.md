@@ -1,3 +1,13 @@
+---
+title: Support Ticket Triage OpenEnv
+emoji: "🧭"
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Support Ticket Triage OpenEnv
 
 A compact OpenEnv benchmark built around a realistic support operations workflow. The agent must triage customer tickets, route them correctly, and draft policy-safe responses while making steady progress across a short episode.
