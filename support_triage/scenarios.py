@@ -21,7 +21,8 @@ class ComponentSpec:
         keywords: Required/bonus keywords (for keywords/policy)
         forbidden_keywords: Words that incur penalty (for policy)
         unlock_step: First step this component is scored (default: 1)
-    \"\"\"\n    name: str
+    """
+    name: str
     field: str
     kind: ComponentKind
     weight: float
