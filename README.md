@@ -452,6 +452,5 @@ For issues or questions:
 - 📧 Open an issue on GitHub
 - 🚀 check deployment at: https://huggingface.co/spaces/ritesh1912/hackathon
 - 💬 See examples in `inference.py`
-
 ---
 **Built with ❤️ for the Meta Hackathon. Let's make support AI better.** 🎯
