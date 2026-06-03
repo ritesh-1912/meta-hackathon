@@ -442,7 +442,6 @@ Judges will assess:
 ## 📝 License
 
 Open source benchmark for the Meta OpenEnv Hackathon.
-
 ---
 
 ## 🤝 Support
