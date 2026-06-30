@@ -12,7 +12,6 @@ tags:
 ![OpenEnv](https://img.shields.io/badge/OpenEnv-compatible-blueviolet)
 ![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
 
-
 ---
 
 ## 🚀 Why This Benchmark?
